@@ -2,6 +2,8 @@ import sys
 from functools import reduce
 from itertools import product
 from enum import Enum
+from collections import defaultdict
+
 
 class Junction(Enum):
     SPLIT = 1
@@ -10,7 +12,8 @@ class Junction(Enum):
     SPLIT_TOP = 4
     PASS = 5
 
-#------------------------------------------------------------------------------------------------------#
+
+# ------------------------------------------------------------------------------------------------------#
 # This function reads dimacs files & creates the clauses by it
 def read_dimacs(filename):
     clauses = []
@@ -36,10 +39,12 @@ def read_dimacs(filename):
                 clauses.append(clause)
 
     return num_vars, num_clauses, clauses
-#------------------------------------------------------------------------------------------------------#
 
 
-#------------------------------------------------------------------------------------------------------#
+# ------------------------------------------------------------------------------------------------------#
+
+
+# ------------------------------------------------------------------------------------------------------#
 # This function checks all the cluases and creats the binary representation of each variable.
 def check_binary_x(num_vars, clauses, x_binary_false, x_binary_true):
     for i in range(num_vars):
@@ -58,10 +63,12 @@ def check_binary_x(num_vars, clauses, x_binary_false, x_binary_true):
                 x_binary_true[i] += 1
 
                 x_binary_false[i] = x_binary_false[i] << 1
-#------------------------------------------------------------------------------------------------------#
 
 
-#------------------------------------------------------------------------------------------------------#
+# ------------------------------------------------------------------------------------------------------#
+
+
+# ------------------------------------------------------------------------------------------------------#
 # This function generates and prints all of the truth combinations we can have of the variables.
 def generate_truth_table(num_vars):
     # Generate all combinations of truth values for the given number of variables
@@ -70,27 +77,29 @@ def generate_truth_table(num_vars):
     # Create and print the header row for check
     header = "\n"
     for i in range(num_vars):
-        header += f"x{i+1}\t"
+        header += f"x{i + 1}\t"
     print(header)
-    print("=" * len(header)*3)
+    print("=" * len(header) * 3)
 
     # Print each row of the truth table
     for combination in truth_combinations:
         row = ""
         for val in combination:
             if val:
-            # Add "true" if the value is True
+                # Add "true" if the value is True
                 row += "true\t"
             else:
-            # Add "false" if the value is False
+                # Add "false" if the value is False
                 row += "false\t"
         print(row)
 
     return truth_combinations
-#------------------------------------------------------------------------------------------------------#
 
 
-#------------------------------------------------------------------------------------------------------#
+# ------------------------------------------------------------------------------------------------------#
+
+
+# ------------------------------------------------------------------------------------------------------#
 # This function checks the bitwise or of all variables for each truth combination and sets the output
 def replace_truth_with_binary_and_compute_or(truth_combinations, x_binary_true, x_binary_false):
     binary_rows = []
@@ -120,7 +129,9 @@ def replace_truth_with_binary_and_compute_or(truth_combinations, x_binary_true, 
 
         binary_rows.append(binary_row)
     return binary_rows, or_results, outputs
-#------------------------------------------------------------------------------------------------------#
+
+
+# ------------------------------------------------------------------------------------------------------#
 
 
 # This function calculates the initial true and false blocks for each variable and stores the junctions in true_block_arr and false_block_arr
@@ -131,7 +142,7 @@ def init_variable_block():
         block_false_rows = x_binary_false[var]
         block_cols = (2 ** num_vars) - 1
 
-        for col in range(block_cols+1):
+        for col in range(block_cols + 1):
 
             # true block
             if (col & x_binary_true[var]) == 0:
@@ -160,15 +171,69 @@ def init_variable_block():
             true_block_arr[var].append([block_true_rows, col, Junction.RESET_FALSE])
             false_block_arr[var].append([block_false_rows, col, Junction.RESET_FALSE])
 
+def add_or_update_item(lst, new_item):
+    x, y, new_type = new_item
+    for i, (existing_x, existing_y, existing_type) in enumerate(lst):
+        if existing_x == x and existing_y == y:
+            # Remove the existing item
+            lst.pop(i)
+            break
+    # Add the new item
+    lst.append(new_item)
 
-#-------------------------------------------- Main ----------------------------------------------------#
+
+
+
+def variable_block():
+    whole_block = [[] for _ in range(num_vars)]
+    for i in range(num_vars):
+        if x_binary_true[i] > x_binary_false[i]:
+            # true block
+            for tjunc in true_block_arr[i]:
+                whole_block[i].append(tjunc)
+            # false block
+            for fjunc in false_block_arr[i]:
+                temp_junc = fjunc
+                temp_junc[0] = temp_junc[0] + x_binary_true[i] - x_binary_false[i]
+                add_or_update_item(whole_block[i], temp_junc)
+
+        else:
+            # false block
+            for fjunc in false_block_arr[i]:
+                whole_block[i].append(fjunc)
+            # true block
+            for tjunc in true_block_arr[i]:
+                temp_junc = tjunc
+                temp_junc[0] = temp_junc[0] + x_binary_false[i] - x_binary_true[i]
+                add_or_update_item(whole_block[i], temp_junc)
+
+    return whole_block
+
+
+def update_junctions(whole_blocks):
+    updated_blocks = [[] for _ in range(num_vars)]
+
+    for block in whole_blocks:
+        columns = defaultdict(list)
+        for x, y, t in block:
+            columns[y].append((x, y, t))
+
+        # Process each column in ascending order of y
+        for y in sorted(columns):
+            if columns[y][0] == 0 and columns[y][2] == Junction.RESET_TRUE:
+                add_or_update_item(updated_blocks[i], (y[0], y[1], Junction.SPLIT))
+
+    return updated_blocks
+
+
+# -------------------------------------------- Main ----------------------------------------------------#
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Dimacs file required")
-        sys.exit()
+      #  sys.exit()
 
     # Dimacs file to load
-    filename = sys.argv[1]
+    filename = "3SAT_CNF.dimacs" #sys.argv[1]
     num_vars, num_clauses, clauses = read_dimacs(filename)
 
     # ----Print for verification----
@@ -181,7 +246,7 @@ if __name__ == "__main__":
     # ----Pre-allocate binary variables lists----
     x_binary_false = [0] * (num_vars)
     x_binary_true = [0] * (num_vars)
-    check_binary_x (num_vars, clauses, x_binary_false, x_binary_true)
+    check_binary_x(num_vars, clauses, x_binary_false, x_binary_true)
 
     # ---Print binary representations for True----
     print("\nBinary X (True):")
@@ -195,36 +260,55 @@ if __name__ == "__main__":
 
     # Calculate truth table and output
     truth_combinations = generate_truth_table(num_vars)
-    binary_rows, or_results, output = replace_truth_with_binary_and_compute_or(truth_combinations, x_binary_true, x_binary_false)
+    binary_rows, or_results, output = replace_truth_with_binary_and_compute_or(truth_combinations, x_binary_true,
+                                                                               x_binary_false)
 
     # ----Print the output table----
     # Create and print the header row for check
     header = "\n"
     for i in range(num_vars):
-        header += f"x{i+1}\t"
+        header += f"x{i + 1}\t"
     print(header)
 
-    print("=" * len(header)*3)
+    print("=" * len(header) * 3)
 
     for row, or_result, output in zip(binary_rows, or_results, output):
         binary_strings = [bin(value)[2:] for value in row]
         print("\t".join(binary_strings) +
-            f"\t=> Bitwise OR: {bin(or_result)[2:]} ({or_result})\tOutput: {'True' if output else 'False'}")
-
+              f"\t=> Bitwise OR: {bin(or_result)[2:]} ({or_result})\tOutput: {'True' if output else 'False'}")
 
     true_block_arr = [[] for _ in range(num_vars)]
     false_block_arr = [[] for _ in range(num_vars)]
     init_variable_block()
     i = 1
     for b in true_block_arr:
-        print("\nx",i, " true block junctions: ")
-        i+=1
+        print("\nx", i, " true block junctions: ")
+        i += 1
         for v in b:
             print(v)
 
     i = 1
     for b in false_block_arr:
-        print("\nx",i, " false block junctions: ")
-        i+=1
+        print("\nx", i, " false block junctions: ")
+        i += 1
         for v in b:
             print(v)
+
+
+    # print whole blocks
+    i = 1
+    blocks = variable_block()
+    for block in blocks:
+        print("\n whole block x", i, ":")
+        i +=1
+        for j in block:
+            print("\n", j)
+
+    # updated block junctions
+    updated_blocks = update_junctions(blocks)
+    i=1
+    for block in updated_blocks:
+        print("\n updated block x", i, ":")
+        i +=1
+        for j in block:
+            print("\n", j)
