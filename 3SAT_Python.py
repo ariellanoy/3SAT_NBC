@@ -132,7 +132,19 @@ def replace_truth_with_binary_and_compute_or(truth_combinations, x_binary_true, 
 
 
 # ------------------------------------------------------------------------------------------------------#
+def mask_msb(num):
+    if num == 0:
+        return 0  # If the number is 0, return 0 (no MSB)
 
+    # Start with the least significant bit set to 1
+    mask = 1
+
+    # Shift the mask left until it surpasses or equals the number
+    while mask <= num:
+        mask <<= 1
+
+    # Shift the mask back to get only the MSB
+    return mask >> 1
 
 # This function calculates the initial true and false blocks for each variable and stores the junctions in true_block_arr and false_block_arr
 def init_variable_block():
@@ -153,8 +165,8 @@ def init_variable_block():
 
             else:
                 true_block_arr[var].append([0, col, Junction.RESET_FALSE])
-                if col & x_binary_true[var] != block_true_rows:
-                    true_block_arr[var].append([(col & x_binary_true[var]), col, Junction.RESET_TRUE])
+                if mask_msb(col & x_binary_true[var]) != block_true_rows:
+                    true_block_arr[var].append([mask_msb(col & x_binary_true[var]), col, Junction.RESET_TRUE])
 
             # false block
             if (col & x_binary_false[var]) == 0:
@@ -165,11 +177,12 @@ def init_variable_block():
 
             else:
                 false_block_arr[var].append([0, col, Junction.RESET_FALSE])
-                if col & x_binary_false[var] != block_false_rows:
-                    false_block_arr[var].append([(col & x_binary_false[var]), col, Junction.RESET_TRUE])
+                if mask_msb(col & x_binary_false[var]) != block_false_rows:
+                    false_block_arr[var].append([mask_msb(col & x_binary_false[var]), col, Junction.RESET_TRUE])
 
             true_block_arr[var].append([block_true_rows, col, Junction.RESET_FALSE])
             false_block_arr[var].append([block_false_rows, col, Junction.RESET_FALSE])
+
 
 def add_or_update_item(lst, new_item):
     x, y, new_type = new_item
@@ -180,8 +193,6 @@ def add_or_update_item(lst, new_item):
             break
     # Add the new item
     lst.append(new_item)
-
-
 
 
 def variable_block():
@@ -209,19 +220,41 @@ def variable_block():
 
     return whole_block
 
+def delete_item(lst, del_x, del_y):
+    # Iterate through the list to find the item with matching x and y
+    for item, (existing_x, existing_y, existing_type) in enumerate(lst):
+        if existing_x == del_x and existing_y == del_y:
+            lst.pop(item)  # Remove the item
+            print(f"Deleted item: (x={del_x}, y={del_y}, type={existing_type})")
+            return True  # Return True to indicate successful deletion
+    print(f"No item found with x={del_x} and y={del_y}")
+    return False  # Return False if no item was found
 
 def update_junctions(whole_blocks):
-    updated_blocks = [[] for _ in range(num_vars)]
-
-    for block in whole_blocks:
+    updated_blocks = whole_blocks
+    block_num = 0
+    # for each variable block
+    for whole_block in whole_blocks:
         columns = defaultdict(list)
-        for x, y, t in block:
-            columns[y].append((x, y, t))
+        for og_x, og_y, og_t in whole_block:
+            columns[og_y].append((og_x, og_t))
 
         # Process each column in ascending order of y
         for y in sorted(columns):
-            if columns[y][0] == 0 and columns[y][2] == Junction.RESET_TRUE:
-                add_or_update_item(updated_blocks[i], (y[0], y[1], Junction.SPLIT))
+            true_changed_flag = False
+            print(columns[y])
+            if columns[y][0] == (0, Junction.RESET_TRUE):
+                add_or_update_item(updated_blocks[block_num], [0, y, Junction.SPLIT])
+                true_changed_flag = True
+            # go thru columns[y] until junc is true, change first true junc to split top
+            for x, t in sorted(columns[y]):
+                if t == Junction.RESET_FALSE and x != 0 and x != max(updated_blocks[block_num], key=lambda item: item[0])[0]:
+                    delete_item(updated_blocks[block_num], x, y)
+                if t == Junction.RESET_TRUE and not true_changed_flag:
+                    add_or_update_item(updated_blocks[block_num], [x, y, Junction.SPLIT_TOP])
+                    true_changed_flag = True
+
+        block_num += 1
 
     return updated_blocks
 
@@ -294,8 +327,7 @@ if __name__ == "__main__":
         for v in b:
             print(v)
 
-
-    # print whole blocks
+    # print combined t/f blocks
     i = 1
     blocks = variable_block()
     for block in blocks:
@@ -305,10 +337,10 @@ if __name__ == "__main__":
             print("\n", j)
 
     # updated block junctions
-    updated_blocks = update_junctions(blocks)
-    i=1
-    for block in updated_blocks:
-        print("\n updated block x", i, ":")
-        i +=1
+    updated_junc_blocks = update_junctions(blocks)
+    i = 1
+    for block in updated_junc_blocks:
+        print("\n updated block x", i,":")
+        i += 1
         for j in block:
             print("\n", j)
