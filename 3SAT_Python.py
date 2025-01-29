@@ -94,8 +94,6 @@ def generate_truth_table(num_vars):
         print(row)
 
     return truth_combinations
-
-
 # ------------------------------------------------------------------------------------------------------#
 
 
@@ -129,6 +127,8 @@ def replace_truth_with_binary_and_compute_or(truth_combinations, x_binary_true, 
 
         binary_rows.append(binary_row)
     return binary_rows, or_results, outputs
+# ------------------------------------------------------------------------------------------------------#
+
 
 
 # ------------------------------------------------------------------------------------------------------#
@@ -145,6 +145,8 @@ def mask_msb(num):
 
     # Shift the mask back to get only the MSB
     return mask >> 1
+# ------------------------------------------------------------------------------------------------------#
+
 
 # This function calculates the initial true and false blocks for each variable and stores the junctions in true_block_arr and false_block_arr
 def init_variable_block():
@@ -182,7 +184,9 @@ def init_variable_block():
 
             true_block_arr[var].append([block_true_rows, col, Junction.RESET_FALSE])
             false_block_arr[var].append([block_false_rows, col, Junction.RESET_FALSE])
+# ------------------------------------------------------------------------------------------------------#
 
+# ------------------------------------------------------------------------------------------------------#
 
 def add_or_update_item(lst, new_item):
     x, y, new_type = new_item
@@ -193,8 +197,10 @@ def add_or_update_item(lst, new_item):
             break
     # Add the new item
     lst.append(new_item)
+# ------------------------------------------------------------------------------------------------------#
 
 
+# ------------------------------------------------------------------------------------------------------#
 def variable_block():
     whole_block = [[] for _ in range(num_vars)]
     for i in range(num_vars):
@@ -219,17 +225,22 @@ def variable_block():
                 add_or_update_item(whole_block[i], temp_junc)
 
     return whole_block
+# ------------------------------------------------------------------------------------------------------#
 
+
+# ------------------------------------------------------------------------------------------------------#
 def delete_item(lst, del_x, del_y):
     # Iterate through the list to find the item with matching x and y
     for item, (existing_x, existing_y, existing_type) in enumerate(lst):
         if existing_x == del_x and existing_y == del_y:
             lst.pop(item)  # Remove the item
-            print(f"Deleted item: (x={del_x}, y={del_y}, type={existing_type})")
+            #print(f"Deleted item: (x={del_x}, y={del_y}, type={existing_type})")
             return True  # Return True to indicate successful deletion
     print(f"No item found with x={del_x} and y={del_y}")
     return False  # Return False if no item was found
+# ------------------------------------------------------------------------------------------------------#
 
+# ------------------------------------------------------------------------------------------------------#
 def update_junctions(whole_blocks):
     updated_blocks = whole_blocks
     block_num = 0
@@ -242,7 +253,7 @@ def update_junctions(whole_blocks):
         # Process each column in ascending order of y
         for y in sorted(columns):
             true_changed_flag = False
-            print(columns[y])
+            #print(columns[y])
             if columns[y][0] == (0, Junction.RESET_TRUE):
                 add_or_update_item(updated_blocks[block_num], [0, y, Junction.SPLIT])
                 true_changed_flag = True
@@ -257,8 +268,49 @@ def update_junctions(whole_blocks):
         block_num += 1
 
     return updated_blocks
+# ------------------------------------------------------------------------------------------------------#
 
 
+#------------------------------------------------------------------------------------------------------#
+def unify_all_blocks(updated_junc_blocks):
+    # Initialize variables to track the largest and second largest blocks
+    num_rows = [0] * num_vars
+    unified_blocks = []
+
+    for i in range(num_vars):
+        num_rows[i] =  x_binary_false[i]+x_binary_true[i]-1
+        
+    # Create a list of indexes sorted by the values in the numbers list (in descending order)
+    sorted_indexes = sorted(range(len(num_rows)), key=lambda i: num_rows[i], reverse=True)        
+    
+    # Reorder the lists in main_list according to the order
+    reordered_blocks = [updated_junc_blocks[i] for i in sorted_indexes] 
+    
+    #saving each block as there own to modify before unify
+    block1 = reordered_blocks [0]
+    block2 = reordered_blocks [1]
+    block3 = reordered_blocks [2]
+    
+    unified_blocks.append(block1)
+    
+    # Updating  the second block before unifying 
+    for row_block2 in block2:
+        # adding the number of rows in the first block
+        row_block2 [0] += num_rows[0] -1
+        temp_row = row_block2
+        add_or_update_item(unified_blocks[0], temp_row)
+        
+    # Updating  the thir block before unifying 
+    for row_block3 in block3:
+        # adding the number of rows in the first block
+        row_block3 [0] += num_rows[0] + num_rows[1] -1
+        temp_row = row_block3
+        add_or_update_item(unified_blocks[0], temp_row)
+    
+    return unified_blocks
+#------------------------------------------------------------------------------------------------------#
+        
+    
 # -------------------------------------------- Main ----------------------------------------------------#
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -313,6 +365,7 @@ if __name__ == "__main__":
     true_block_arr = [[] for _ in range(num_vars)]
     false_block_arr = [[] for _ in range(num_vars)]
     init_variable_block()
+    
     i = 1
     for b in true_block_arr:
         print("\nx", i, " true block junctions: ")
@@ -334,7 +387,7 @@ if __name__ == "__main__":
         print("\n whole block x", i, ":")
         i +=1
         for j in block:
-            print("\n", j)
+            print(j)
 
     # updated block junctions
     updated_junc_blocks = update_junctions(blocks)
@@ -343,4 +396,14 @@ if __name__ == "__main__":
         print("\n updated block x", i,":")
         i += 1
         for j in block:
-            print("\n", j)
+            print(j)
+            
+    #unified block printing
+    print("\n the unified block :")
+    unified_to_one_block = unify_all_blocks(updated_junc_blocks)    
+    
+    for row in unified_to_one_block:
+        for j in row:
+            print(j)
+
+    
