@@ -273,44 +273,106 @@ def update_junctions(whole_blocks):
 
 #------------------------------------------------------------------------------------------------------#
 def unify_all_blocks(updated_junc_blocks):
-    # Initialize variables to track the largest and second largest blocks
-    num_rows = [0] * num_vars
-    unified_blocks = []
+   # Calculate number of rows for each block
+    num_rows = [max(x for x, _, _ in block) + 1 for block in updated_junc_blocks]  # Counting the rows based on max x
 
-    for i in range(num_vars):
-        num_rows[i] =  x_binary_false[i]+x_binary_true[i]-1
-        
-    # Create a list of indexes sorted by the values in the numbers list (in descending order)
-    sorted_indexes = sorted(range(len(num_rows)), key=lambda i: num_rows[i], reverse=True)        
-    
-    # Reorder the lists in main_list according to the order
-    reordered_blocks = [updated_junc_blocks[i] for i in sorted_indexes] 
-    
-    #saving each block as there own to modify before unify
-    block1 = reordered_blocks [0]
-    block2 = reordered_blocks [1]
-    block3 = reordered_blocks [2]
-    
-    unified_blocks.append(block1)
-    
-    # Updating  the second block before unifying 
-    for row_block2 in block2:
-        # adding the number of rows in the first block
-        row_block2 [0] += num_rows[0] -1
-        temp_row = row_block2
-        add_or_update_item(unified_blocks[0], temp_row)
-        
-    # Updating  the thir block before unifying 
-    for row_block3 in block3:
-        # adding the number of rows in the first block
-        row_block3 [0] += num_rows[0] + num_rows[1] -1
-        temp_row = row_block3
-        add_or_update_item(unified_blocks[0], temp_row)
-    
-    return unified_blocks
+    # Sort blocks by descending size (most rows first)
+    sorted_indexes = sorted(range(len(updated_junc_blocks)), key=lambda i: num_rows[i], reverse=True)
+    reordered_blocks = [updated_junc_blocks[i] for i in sorted_indexes]
+
+    unified_block = []
+    row_offset = 0
+
+    # Add the largest block first
+    for i, block in enumerate(reordered_blocks):
+        for x, y, t in block:
+            unified_block.append([x + row_offset, y, t])
+
+        # Use exact overlap (output row of current is input row of next)
+        if i < len(reordered_blocks) - 1:
+            max_row = max(x for x, _, _ in block)
+            row_offset += max_row  # Update the row offset for the next block
+
+    return unified_block
+
+
+
 #------------------------------------------------------------------------------------------------------#
+
+
+#------------------------------------------------------------------------------------------------------#
+def save_to_file(filename, num_vars, num_clauses, clauses, updated_junc_blocks, unified_block, blocks):
+    # Open the file in write mode
+    with open(filename, 'w') as f:
+        # Write the SAT problem definition (number of variables and clauses)
+        f.write(f"Problem: 3SAT\n")
+        f.write(f"Number of variables: {num_vars}\n")
+        f.write(f"Number of clauses: {num_clauses}\n")
+        f.write(f"Clauses:\n")
+        for clause in clauses:
+            f.write(f"{' '.join(map(str, clause))} 0\n")
         
+        f.write("\n" + "=" * 50 + "\n")  # Separate problem definition from the block outputs
+
+        # Add the node types table
+        f.write("\nNode Types and their Symbols:\n")
+        f.write(f"{'Type':<15} {'Symbol'}\n")
+        f.write("-" * 20 + "\n")
+        f.write(f"{'RESET_FALSE':<15} {'@'}\n")
+        f.write(f"{'RESET_TRUE':<15} {'#'}\n")
+        f.write(f"{'SPLIT':<15} {'%'}\n")
+        f.write(f"{'SPLIT_TOP':<15} {'&'}\n")
+        f.write("-" * 20 + "\n")
+
+        f.write("\n" + "=" * 50 + "\n")  # Add another separator before block outputs
+        
+        # Now write the updated junction blocks
+        f.write("\nUnified blocks for each variable:\n")
+        for i, block in enumerate(updated_junc_blocks):
+            f.write(f"\nUpdated block x{i+1} symbolic block:\n")
+            print_symbolic_block(block, f)  # Call the function to write directly to the file
+
+        # Finally, write the unified block
+        f.write("\nUnified NBC Block:\n")
+        print_symbolic_block(unified_block, f)  # Call the function to write directly to the file
+#------------------------------------------------------------------------------------------------------#
+
+
+#------------------------------------------------------------------------------------------------------#
+def print_symbolic_block(block, f=None):
+    # Find grid dimensions
+    max_x = max(x for x, _, _ in block)
+    max_y = max(y for _, y, _ in block)
+
+    # Initialize empty grid
+    grid = [[" " for _ in range(max_y + 1)] for _ in range(max_x + 1)]
+
+    # Fill grid with symbols
+    for x, y, t in block:
+        if t == Junction.RESET_FALSE:
+            grid[x][y] = "@"
+        elif t == Junction.RESET_TRUE:
+            grid[x][y] = "#"
+        elif t == Junction.SPLIT:
+            grid[x][y] = "%"
+        elif t == Junction.SPLIT_TOP:
+            grid[x][y] = "&"
+        elif t == Junction.PASS:
+            grid[x][y] = "."
+
+    # Print header
+    header = "    " + " ".join(f"{j:2}" for j in range(max_y + 1))
+    if f:
+        f.write(header + "\n")
+        f.write("    " + "--" * (max_y + 1) + "\n")
     
+    for i, row in enumerate(grid):
+        line = f"{i:2} | " + " ".join(f"{cell:2}" for cell in row)
+        if f:
+            f.write(line + "\n")
+        else:
+            print(line)
+
 # -------------------------------------------- Main ----------------------------------------------------#
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -318,7 +380,7 @@ if __name__ == "__main__":
       #  sys.exit()
 
     # Dimacs file to load
-    filename = "3SAT_CNF.dimacs" #sys.argv[1]
+    filename = sys.argv[1]
     num_vars, num_clauses, clauses = read_dimacs(filename)
 
     # ----Print for verification----
@@ -402,8 +464,19 @@ if __name__ == "__main__":
     print("\n the unified block :")
     unified_to_one_block = unify_all_blocks(updated_junc_blocks)    
     
+    """
     for row in unified_to_one_block:
         for j in row:
             print(j)
-
+    """
     
+    print_symbolic_block(unified_to_one_block)
+    # File to save the result
+output_filename = "NBC_output.txt"
+
+# Save the results to a file
+save_to_file(output_filename, num_vars, num_clauses, clauses, updated_junc_blocks, unified_to_one_block, blocks)
+
+print(f"Results saved to {output_filename}")
+
+
